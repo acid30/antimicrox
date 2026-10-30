@@ -1064,9 +1064,23 @@ void JoyButton::mouseEvent()
                         break;
                     }
                     case QuadraticExtremeCurve: {
-                        double temp = difference;
-                        difference = difference * difference;
-                        difference = (temp >= 0.95) ? (difference * 1.5) : difference;
+                        // CUSTOM "knee" curve (replaces Quadratic Extreme):
+                        //  0 .. KNEE_IN of stick   -> 0 .. KNEE_OUT of mouse speed (straight line)
+                        //  KNEE_IN .. 100% of stick -> KNEE_OUT .. 100% of mouse speed, exponential,
+                        //  starting with the same slope as the first segment (no kink at the knee)
+                        //  and getting steeper towards 100%.
+                        const double KNEE_IN = 0.60;
+                        const double KNEE_OUT = 0.40;
+                        const double KNEE_K = 1.4497; // exponential strength; gives matching slope at the knee
+                        if (difference <= KNEE_IN)
+                        {
+                            difference = difference * (KNEE_OUT / KNEE_IN);
+                        } else
+                        {
+                            double t = (difference - KNEE_IN) / (1.0 - KNEE_IN);
+                            difference = KNEE_OUT + (1.0 - KNEE_OUT) * (exp(KNEE_K * t) - 1.0) / (exp(KNEE_K) - 1.0);
+                        }
+                        difference = qMin(qMax(difference, 0.0), 1.0);
                         break;
                     }
                     case PowerCurve: {
@@ -4133,7 +4147,6 @@ int JoyButton::calculateFinalMouseSpeed(JoyMouseCurve curve, int value, const fl
 
     switch (curve)
     {
-    case QuadraticExtremeCurve:
     case EasingQuadraticCurve:
     case EasingCubicCurve: {
         result *= 1.5;
